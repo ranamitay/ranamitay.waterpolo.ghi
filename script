@@ -29,6 +29,17 @@ function main(){
   }
 }
 
+function getOrCreateCalendar(name){
+  var c = CalendarApp.getCalendarsByName(name);
+  if (c.length == 0){
+    var new_c = CalendarApp.createCalendar(name);
+    Logger.log("created a new calendar: %s", new_c.getName());
+    return new_c;
+  }
+  Logger.log("found exisitng calendar: %s", c[0].getName());
+  return c[0];
+}
+
 function addMinutes(date, minutes) {
     return new Date(date.getTime() + minutes*60000);
 }
@@ -74,8 +85,8 @@ class CalendarRecord {
   getStartTime(){
     
     //Logger.log(`${Session.getActiveUserLocale()}, ${Session.getTimeZone()}, ${Session.getScriptTimeZone()}`);
-    //Logger.log(`${this.date} = ${this.date.toLocaleDateString()}`);
-    //Logger.log(`${this.time} = ${this.time.toLocaleTimeString()}`);
+    Logger.log(`${this.date}`);
+    Logger.log(`${this.time} = ${this.time.toLocaleTimeString()}`);
     var new_time = new Date(`${this.date.toLocaleDateString()} ${this.time.toLocaleTimeString()}`);
     //Logger.log(`${new_time.toString()}`);
     return new_time;
