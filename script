@@ -3,67 +3,73 @@
 // main
 // אם לא, יש ללחוץ על החץ ולבחור
 //
+console.info('test');
+const exclude_calendars = ['waterpolo.ghi.22@gmail.com', 'Jewish Holidays'];
+const ghi = 'גבעת חיים';
+const sheet_filename = 'לוז מרוכז כל הליגות';
+const from_date = new Date('1/1/2022 00:00');
+const to_date = new Date('12/31/2023 23:59');
+const game_number_id = 'game_number';
 
-const exclude_calendars=["waterpolo.ghi.22@gmail.com", "Jewish Holidays"];
-const ghi="גבעת חיים";
-const sheet_filename= 'לוז מרוכז כל הליגות';
-const from_date = new Date("1/1/2022 00:00");
-const to_date = new Date("12/31/2023 23:59");
-const game_number_id="game_number";
+Logger.log(
+  `${Session.getActiveUserLocale()}, ${Session.getTimeZone()}, ${Session.getScriptTimeZone()}`
+);
 
-function main(){
-  try{
+function main() {
+  try {
+    Logger.log('STARTING');
     //deletaAllEvents()
-    var existing_events=getAllCalendarEvents();
-    
-    var sheet = readMainSheet()
+    var existing_events = getAllCalendarEvents();
+
+    var sheet = readMainSheet();
 
     var crs = convertSheetToCalendarRecords(sheet);
 
-    iterateCRs(crs,existing_events);
+    iterateCRs(crs, existing_events);
 
+    Logger.log('COMPLETED OK');
   } catch (err) {
     // TODO (developer) - Handle exception
     Logger.log('Failed with error %s', err.stack);
-    throw err
+    throw err;
   }
 }
 
-function getOrCreateCalendar(name){
+function getOrCreateCalendar(name) {
   var c = CalendarApp.getCalendarsByName(name);
-  if (c.length == 0){
+  if (c.length == 0) {
     var new_c = CalendarApp.createCalendar(name);
-    Logger.log("created a new calendar: %s", new_c.getName());
+    Logger.log('created a new calendar: %s', new_c.getName());
     return new_c;
   }
-  Logger.log("found exisitng calendar: %s", c[0].getName());
+  Logger.log('found exisitng calendar: %s', c[0].getName());
   return c[0];
 }
 
 function addMinutes(date, minutes) {
-    return new Date(date.getTime() + minutes*60000);
+  return new Date(date.getTime() + minutes * 60000);
 }
 
 class CalendarRecord {
-  constructor(row) { // class constructor
-    this.team=row[0]; // ליגה/גביע
-    this.stage=row[1]; // שלב
-    this.round=row[2]; // מחזור
-    this.date=row[3]; //תאריך
-    this.day=row[4]; //יום
-    this.time=row[5]; // שעה
-    this.host=row[6]; // מארחת
-    this.guest=row[7]; // אורחת
-    this.location=row[8]; // מקום
-    this.notes=row[9]; // הערות שינויים
-    this.game_number=row[10]; // מספר משחק
-    this.referee=row[11]; // שופט 
-    this.referee_2=row[12]; // שופט 2
-    this.referee_trainee=row[13]; // שופט מתלמד
+  constructor(row) {
+    // class constructor
+    this.team = row[0]; // ליגה/גביע
+    this.stage = row[1]; // שלב
+    this.round = row[2]; // מחזור
+    this.date = row[3]; //תאריך
+    this.day = row[4]; //יום
+    this.time = row[5]; // שעה
+    this.host = row[6]; // מארחת
+    this.guest = row[7]; // אורחת
+    this.location = row[8]; // מקום
+    this.notes = row[9]; // הערות שינויים
+    this.game_number = row[10]; // מספר משחק
+    this.referee = row[11]; // שופט
+    this.referee_2 = row[12]; // שופט 2
+    this.referee_trainee = row[13]; // שופט מתלמד
   }
 
-
-  toString(){
+  toString() {
     return `CalendarRecord(
       team=${this.team}, 
       stage=${this.stage}, 
@@ -82,34 +88,57 @@ class CalendarRecord {
     )`;
   }
 
-  getStartTime(){
-    
-    //Logger.log(`${Session.getActiveUserLocale()}, ${Session.getTimeZone()}, ${Session.getScriptTimeZone()}`);
-    Logger.log(`${this.date}`);
-    Logger.log(`${this.time} = ${this.time.toLocaleTimeString()}`);
-    var new_time = new Date(`${this.date.toLocaleDateString()} ${this.time.toLocaleTimeString()}`);
-    //Logger.log(`${new_time.toString()}`);
-    return new_time;
-  }
-  
-  getEndTime(){
-    return addMinutes( this.getStartTime(),60);
+  getStartTime() {
+    //
+    Logger.log(`getting start time for: ${this.toString()}`);
+    try {
+      let start_time_str = this.time.toLocaleTimeString();
+      let new_time = new Date(
+        `${this.date.toLocaleDateString()} ${this.time.toLocaleTimeString()}`
+      );
+      return new_time;
+    } catch (err) {
+      Logger.log(`Error: ${err.stack}`);
+      // if this fails, it might be a "xx:yy-zz:aa" sort of time range we have seen in the excel file. let's try to parse it.
+      let time_arr = this.time.split('-');
+      let start_time = new Date(
+        `${this.date.toLocaleDateString()} ${time_arr[0]}`
+      );
+      Logger.log(`parsed a new start time: ${start_time}`);
+      return start_time;
+    }
   }
 
-  getTitle(){
-    var homeaway, opponent;
-    if (this.host.includes(ghi)){
-      homeaway = "בית";
-      opponent = this.guest;
+  getEndTime() {
+    try {
+      // we try to print this as a time - so it would fail if it's a 11:11-22:22 sort of time.
+      let start_time_str = this.time.toLocaleTimeString();
+      // it's OK, so it's a normal time, we can just add our default 1 hour duration
+      return addMinutes(this.getStartTime(), 60);
+    } catch (err) {
+      // if this fails, it might be a "xx:yy-zz:aa" sort of time range we have seen in the excel file. let's try to parse it.
+      let time_arr = this.time.split('-');
+      let end_time = new Date(
+        `${this.date.toLocaleDateString()} ${time_arr[1]}`
+      );
+      Logger.log(`parsed a new end time: ${end_time}`);
+      return end_time;
     }
-    else{
-      homeaway = "חוץ";
+  }
+
+  getTitle() {
+    var homeaway, opponent;
+    if (this.host.includes(ghi)) {
+      homeaway = 'בית';
+      opponent = this.guest;
+    } else {
+      homeaway = 'חוץ';
       opponent = this.host;
     }
     return `${this.team} (${homeaway}) ${opponent}`;
   }
 
-  getDescription(){
+  getDescription() {
     return `${this.stage}, מחזור ${this.round},
      הערות/שינויים: ${this.notes}
      שופט: ${this.referee}
@@ -119,110 +148,131 @@ class CalendarRecord {
   }
 }
 
-
-
 function readMainSheet() {
-  Logger.log("starting...")
-  var this_file =DriveApp.getFilesByName(sheet_filename).next();
+  Logger.log('starting...');
+  var this_file = DriveApp.getFilesByName(sheet_filename).next();
   Logger.log(this_file.getName());
   var spreadsheet = SpreadsheetApp.open(this_file);
-  spreadsheet.setSpreadsheetTimeZone("Asia/Jerusalem")
-  spreadsheet.setSpreadsheetLocale("he-IL");
-  Logger.log(`spreadsheet: ${spreadsheet.getSpreadsheetTimeZone()}, ${spreadsheet.getSpreadsheetLocale()}`);
+  spreadsheet.setSpreadsheetTimeZone('Asia/Jerusalem');
+  spreadsheet.setSpreadsheetLocale('he-IL');
+  Logger.log(
+    `spreadsheet: ${spreadsheet.getSpreadsheetTimeZone()}, ${spreadsheet.getSpreadsheetLocale()}`
+  );
   var sheet = spreadsheet.getSheets()[1];
   Logger.log(sheet.getName());
-  return sheet
+  return sheet;
 }
 
-function convertSheetToCalendarRecords(sheet){
+function convertSheetToCalendarRecords(sheet) {
   // collect only GH records
-  Logger.log("working on sheet: %s",sheet.getName())
+  Logger.log('working on sheet: %s', sheet.getName());
   var data = sheet.getDataRange().getValues();
-  data.splice(0,1); // remove titles row
+  data.splice(0, 1); // remove titles row
   var crs = [];
   data.forEach(function (row) {
-    if (row[6]==ghi || row[7] ==ghi){
+    if (
+      row[6] == ghi ||
+      row[7] == ghi ||
+      (row[6] == '' && row[7] == '' && row[10] > 0)
+    ) {
       var cr = new CalendarRecord(row);
       Logger.log(cr.toString());
       crs.push(cr);
-    };
+    }
   });
   return crs;
 }
-function deleteEvents(events){
-  events.forEach(function(event){
-    Logger.log(`WARN: Deleting event: ${event.getTitle()}, game_number=${event.getTag(game_number_id)}`);
+function deleteEvents(events) {
+  events.forEach(function (event) {
+    Logger.log(
+      `WARN: Deleting event: ${event.getTitle()}, game_number=${event.getTag(
+        game_number_id
+      )}`
+    );
     event.deleteEvent();
   });
 }
-function deletaAllEvents(){
-  Logger.log("WARN: deleting ALL EVENTS!!!");
+function deletaAllEvents() {
+  Logger.log('WARN: deleting ALL EVENTS!!!');
   var all_calendars_events = getAllCalendarEvents();
-    // for(var [cal_name, cal_events] of Object.entries(all_calendars_and_events)) {
-    //   deleteEvents(cal_events);
-    // }
-    deleteEvents(all_calendars_events);
+  // for(var [cal_name, cal_events] of Object.entries(all_calendars_and_events)) {
+  //   deleteEvents(cal_events);
+  // }
+  deleteEvents(all_calendars_events);
 }
-function getAllCalendarEvents(){
+function getAllCalendarEvents() {
   //var calendars = {};
-  var events_list=[];
+  var events_list = [];
 
   var all_calendars = CalendarApp.getAllCalendars();
-  all_calendars.forEach(function(cal){   
-    if (exclude_calendars.includes(cal.getName()) || cal.getName().includes("אימונים")) {
+  all_calendars.forEach(function (cal) {
+    if (
+      exclude_calendars.includes(cal.getName()) ||
+      cal.getName().includes('אימונים')
+    ) {
       Logger.log(`Skipping ${cal.getName()}`);
       return;
     }
     Logger.log(`adding existing calendar: ${cal.getName()}`);
     //calendars[cal.getName()]=[];
-    var cal_events = cal.getEvents(from_date,to_date);
-    cal_events.forEach(function(event){
+    var cal_events = cal.getEvents(from_date, to_date);
+    cal_events.forEach(function (event) {
       if (event.getTag(game_number_id) == null) {
         Logger.log(`Skipping ${event.getTitle()}`);
         return;
       }
-      Logger.log(`  adding existing event: ${event.getTag(game_number_id)} - ${event.getStartTime()}`);
+      Logger.log(
+        `  adding existing event: ${event.getTag(
+          game_number_id
+        )} - ${event.getStartTime()}`
+      );
       //calendars[cal.getName()].push(event);
       events_list.push(event);
     });
   });
-  Logger.log(`${events_list.length} events loaded.`)
+  Logger.log(`${events_list.length} events loaded.`);
   return events_list;
 }
 
-function findEvent(cr, existing_events){
-  for (const event of existing_events){
-    if (cr.game_number == event.getTag(game_number_id)){
-      Logger.log(`found a matching existing event: ${event.getTag(game_number_id)}`);
+function findEvent(cr, existing_events) {
+  for (const event of existing_events) {
+    if (cr.game_number == event.getTag(game_number_id)) {
+      Logger.log(
+        `found a matching existing event: ${event.getTag(game_number_id)}`
+      );
       return event;
     }
-  };
+  }
   Logger.log(`no event found for ${cr.game_number}`);
   return null;
 }
 
-function createEvent(cr){
+function createEvent(cr) {
   Logger.log(`creating event: ${cr.game_number} - ${cr.getStartTime()}...`);
   var c = getOrCreateCalendar(cr.team);
   Logger.log(`creating event: ${cr.game_number}...`);
-  var event = c.createEvent(cr.getTitle(),
-                            cr.getStartTime(),
-                            cr.getEndTime(),
-                            {
-                              location: cr.location,
-                              description: cr.getDescription()
-                            });
-  event.setTag(game_number_id,cr.game_number);
+  var event = c.createEvent(cr.getTitle(), cr.getStartTime(), cr.getEndTime(), {
+    location: cr.location,
+    description: cr.getDescription(),
+  });
+  event.setTag(game_number_id, cr.game_number);
   Logger.log(`creating event: ${cr.game_number} - ${cr.getStartTime()}...OK`);
 }
 
-function updateEvent(existing_event, cr){
+function updateEvent(existing_event, cr) {
   Logger.log(`updating existing_event: ${cr.game_number}...`);
   if (existing_event.getTitle() != cr.getTitle()) {
-    Logger.log(`updating Title: ${existing_event.getTitle()}  != ${cr.getTitle()}`);
+    Logger.log(
+      `updating Title: ${existing_event.getTitle()}  != ${cr.getTitle()}`
+    );
     existing_event.setTitle(cr.getTitle());
   }
-  if (existing_event.getStartTime().toLocaleString() != cr.getStartTime().toLocaleString() || existing_event.getEndTime().toLocaleString() != cr.getEndTime().toLocaleString()){
+  if (
+    existing_event.getStartTime().toLocaleString() !=
+      cr.getStartTime().toLocaleString() ||
+    existing_event.getEndTime().toLocaleString() !=
+      cr.getEndTime().toLocaleString()
+  ) {
     Logger.log(`updating startTime: 
     ${existing_event.getStartTime()}  != ${cr.getStartTime()} 
     OR
@@ -230,28 +280,29 @@ function updateEvent(existing_event, cr){
     existing_event.setTime(cr.getStartTime(), cr.getEndTime());
   }
   if (existing_event.getDescription() != cr.getDescription()) {
-    Logger.log(`updating description: ${existing_event.getDescription()}  != ${cr.getDescription()}`);
+    Logger.log(
+      `updating description: ${existing_event.getDescription()}  != ${cr.getDescription()}`
+    );
     existing_event.setDescription(cr.getDescription());
   }
   if (existing_event.getLocation() != cr.location) {
-    Logger.log(`updating location: ${existing_event.getLocation()}  != ${cr.location}`);
+    Logger.log(
+      `updating location: ${existing_event.getLocation()}  != ${cr.location}`
+    );
     existing_event.setLocation(cr.location);
   }
   Logger.log(`updating existing_event: ${cr.game_number}...OK`);
 }
 
-function iterateCRs(crs, existing_events){
-  crs.forEach(function(cr){
+function iterateCRs(crs, existing_events) {
+  crs.forEach(function (cr) {
     Logger.log(`Working on cr ${cr.game_number} - ${cr.getStartTime()}...`);
-    var existing_event = findEvent(cr,existing_events);
-    if (existing_event != null){
-      updateEvent(existing_event,cr);
+    var existing_event = findEvent(cr, existing_events);
+    if (existing_event != null) {
+      updateEvent(existing_event, cr);
     } else {
       createEvent(cr);
     }
     Logger.log(`Working on cr ${cr.game_number} - ${cr.getStartTime()}...OK`);
   });
-  
 }
-
-
